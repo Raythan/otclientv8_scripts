@@ -389,13 +389,12 @@ end)
 UI.Separator()
 
 
-function closeChannel(name)
-	modules.game_console.removeTab(name)
-end
 
 macro(1000, "Close Channels", function()
-	closeChannel("Trade")
-	closeChannel("Help")
-	closeChannel("Quests")
-	closeChannel("Game-Chat")
+	modules.game_console.removeTab("Trade")
+	modules.game_console.removeTab("Help")
+	modules.game_console.removeTab("Quests")
+	modules.game_console.removeTab("Game-Chat")
 end)
+
+UI.Separator()

@@ -387,3 +387,15 @@ for _, tile in ipairs(g_map.getTiles(z)) do
 end)
 
 UI.Separator()
+
+
+function closeChannel(name)
+	modules.game_console.removeTab(name)
+end
+
+macro(1000, "Close Channels", function()
+	closeChannel("Trade")
+	closeChannel("Help")
+	closeChannel("Quests")
+	closeChannel("Game-Chat")
+end)

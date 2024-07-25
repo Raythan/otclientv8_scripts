@@ -386,9 +386,6 @@ for _, tile in ipairs(g_map.getTiles(z)) do
     end
 end)
 
-UI.Separator()
-
-
 
 macro(1000, "Close Channels", function()
 	modules.game_console.removeTab("Trade")

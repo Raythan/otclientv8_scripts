@@ -373,7 +373,7 @@ macro(1000, "Stack items", function()
   end
 end)
 
-local idz = {3031, 3035, 3043, 14112, 10386, 10384} -- adicionar ID dos itens
+local idz = {3031, 3035, 3043, 14112, 10386, 10384, 3428} -- adicionar ID dos itens
 macro(400, "Coletar", function()
 local z = posz()
 for _, tile in ipairs(g_map.getTiles(z)) do

@@ -395,3 +395,23 @@ macro(1000, "Close Channels", function()
 end)
 
 UI.Separator()
+
+macro(200, "Empurrar Itens", function()
+  push(0, -1)  -- Empurra o item ao norte para 1 sqm ao norte
+  push(0, 1)   -- Empurra o item ao sul para 1 sqm ao sul
+  push(-1, 0)  -- Empurra o item a oeste para 1 sqm a oeste
+  push(1, 0)   -- Empurra o item a leste para 1 sqm a leste
+end)
+
+function push(x, y)
+  local playerPos = player:getPosition()
+  local targetPos = {x = playerPos.x + x, y = playerPos.y + y, z = playerPos.z}
+  local pushPos = {x = targetPos.x + x, y = targetPos.y + y, z = targetPos.z}
+
+  local tile = g_map.getTile(targetPos)
+  local thing = tile and tile:getTopThing()
+  
+  if thing and thing:isItem() then
+    g_game.move(thing, pushPos, thing:getCount())
+  end
+end

@@ -386,7 +386,6 @@ for _, tile in ipairs(g_map.getTiles(z)) do
     end
 end)
 
-
 macro(1000, "Close Channels", function()
 	modules.game_console.removeTab("Trade")
 	modules.game_console.removeTab("Help")
@@ -394,7 +393,6 @@ macro(1000, "Close Channels", function()
 	modules.game_console.removeTab("Game-Chat")
 end)
 
-UI.Separator()
 
 macro(200, "Empurrar Itens", function()
   push(0, -1)  -- Empurra o item ao norte para 1 sqm ao norte
@@ -415,3 +413,5 @@ function push(x, y)
     g_game.move(thing, pushPos, thing:getCount())
   end
 end
+
+UI.Separator()

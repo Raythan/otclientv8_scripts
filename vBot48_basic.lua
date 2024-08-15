@@ -414,4 +414,12 @@ function push(x, y)
   end
 end
 
+macro(11000, "Say bless with delay", function()
+  if storage.autoBlessMessage:len() > 0 then sayChannel(channel, storage.autoBlessMessage) end
+end)
+
+UI.TextEdit(storage.autoBlessMessage or "!bless", function(widget, text)    
+  storage.autoBlessMessage = text
+end)
+
 UI.Separator()

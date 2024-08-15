@@ -1,4 +1,4 @@
-setDefaultTab("Tools")
+setDefaultTab("Main")
 
 local autopartyui = setupUI([[
 Panel

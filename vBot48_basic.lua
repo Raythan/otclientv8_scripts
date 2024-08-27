@@ -353,7 +353,7 @@ UI.DualScrollPanel(storage.manaTrain, function(widget, newParams)
 end)
 
 
-UI.Label("Mana train ingnore target")
+UI.Label("Mana train ignore target")
 if type(storage.manaTrainNoTarget) ~= "table" then
   storage.manaTrainNoTarget = {on=false, title="MP%", text="utevo lux", min=95, max=100}
 end

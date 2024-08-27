@@ -333,11 +333,9 @@ UI.Separator()
 
 
 
-
-
-UI.Label("Mana training")
+UI.Label("Mana train")
 if type(storage.manaTrain) ~= "table" then
-  storage.manaTrain = {on=false, title="MP%", text="utevo lux", min=80, max=100}
+  storage.manaTrain = {on=false, title="MP%", text="utevo lux", min=95, max=100}
 end
 
 local manatrainmacro = macro(1000, function()
@@ -352,6 +350,25 @@ manatrainmacro.setOn(storage.manaTrain.on)
 UI.DualScrollPanel(storage.manaTrain, function(widget, newParams) 
   storage.manaTrain = newParams
   manatrainmacro.setOn(storage.manaTrain.on)
+end)
+
+
+UI.Label("Mana train ingnore target")
+if type(storage.manaTrainNoTarget) ~= "table" then
+  storage.manaTrainNoTarget = {on=false, title="MP%", text="utevo lux", min=95, max=100}
+end
+
+local manatrainmacronotarget = macro(1000, function()
+  local mana = math.min(100, math.floor(100 * (player:getMana() / player:getMaxMana())))
+  if storage.manaTrainNoTarget.max >= mana and mana >= storage.manaTrainNoTarget.min then
+    say(storage.manaTrainNoTarget.text)
+  end
+end)
+manatrainmacronotarget.setOn(storage.manaTrainNoTarget.on)
+
+UI.DualScrollPanel(storage.manaTrainNoTarget, function(widget, newParams) 
+  storage.manaTrainNoTarget = newParams
+  manatrainmacronotarget.setOn(storage.manaTrainNoTarget.on)
 end)
 
 macro(1000, "Stack items", function()

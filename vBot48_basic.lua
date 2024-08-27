@@ -408,6 +408,7 @@ macro(1000, "Close Channels", function()
 	modules.game_console.removeTab("Help")
 	modules.game_console.removeTab("Quests")
 	modules.game_console.removeTab("Game-Chat")
+	modules.game_console.removeTab("Loot")
 end)
 
 

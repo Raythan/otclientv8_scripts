@@ -453,3 +453,16 @@ macro(400, "Cavebot Check", function()
 end)
 
 UI.Separator()
+
+macro(1000, "Vocation Summon - V13+", function()
+    if isInPz() then return end
+    if modules.game_cooldown.isGroupCooldownIconActive(3) then return end
+    local voc_data = { [1] = "eq", [2] = "sac", [3] = "ven", [4] = "dru", }
+    local spell_end = voc_data[player:getVocation()]
+    if spell_end then
+        local spell = "utevo gran res " .. spell_end
+        if canCast(spell) then
+            cast(spell, 900000)
+        end
+    end
+end)

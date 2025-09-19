@@ -1,95 +1,140 @@
-local lastPos = nil
-local lastDirection = nil
-local followTarget = storage.followLeader or ""
-local isSearching = false
+Prompt Mestre para Construção do Script "Dream Nav" para OTCv8
+Objetivo: Você é um programador especialista em Lua focado em scripts para o cliente de Tibia OTCv8. Sua tarefa é criar, passo a passo, um script completo chamado "Dream Nav". Este script tem como objetivo gerenciar um grupo de personagens (um líder e vários seguidores) para caçar em equipe, coordenando movimentos, ataques e outras ações. Baseie-se na funcionalidade demonstrada no vídeo "OTCv8 Script - Tutorial Dream Nav".
 
-local followMacro = macro(500, "Follow", function()
-    if not g_game.isOnline() then
-        followMacro:turnOff()
-        return
-    end
+Vamos construir o script em módulos. Apresente o código Lua para cada módulo de forma clara e com comentários para explicar a lógica.
 
-    followTarget = storage.followLeader
-    if not followTarget or followTarget == "" then
-        g_game.cancelFollow()
-        return
-    end
+Módulo 1: Estrutura Principal e Interface Gráfica (UI)
 
-    local leader = g_game.getCreatureByName(followTarget)
-    local playerPos = player:getPosition()
+Primeiro, crie a base do script. Ele precisa de uma janela principal com abas para organizar as configurações e botões de ação.
 
-    if leader then
-        isSearching = false
-        g_game.follow(leader)
-        lastPos = leader:getPosition()
-        lastDirection = leader:getDirection()
-    elseif lastPos then
-        g_game.cancelFollow()
-        autoWalk(lastPos, 1, { precision = 0 })
+Crie a Janela Principal:
 
-        if not isSearching and playerPos == lastPos and not g_game.getCreatureByName(followTarget) then
-            isSearching = true
-            useNearbyItemsAndSpells(lastPos)
-        end
-    end
-end)
+Uma janela chamada "Dream Nav".
 
-UI.Label("Follow Player:")
-addTextEdit("playerToFollow", storage.followLeader or "", function(widget, text)
-    storage.followLeader = text
-    followTarget = text
-    lastPos = nil
-    isSearching = false
-    g_game.cancelFollow()
-end)
+Deve conter um botão para ligar/desligar o script.
 
-function useNearbyItemsAndSpells(centerPos)
-    local positions = {
-        { x = centerPos.x,     y = centerPos.y,     z = centerPos.z },
-        { x = centerPos.x - 1, y = centerPos.y,     z = centerPos.z },
-        { x = centerPos.x + 1, y = centerPos.y,     z = centerPos.z },
-        { x = centerPos.x,     y = centerPos.y - 1, z = centerPos.z },
-        { x = centerPos.x,     y = centerPos.y + 1, z = centerPos.z },
-        { x = centerPos.x - 1, y = centerPos.y - 1, z = centerPos.z },
-        { x = centerPos.x + 1, y = centerPos.y - 1, z = centerPos.z },
-        { x = centerPos.x - 1, y = centerPos.y + 1, z = centerPos.z },
-        { x = centerPos.x + 1, y = centerPos.y + 1, z = centerPos.z }
-    }
+Crie a Interface Gráfica com os seguintes elementos:
 
-    for i, pos in ipairs(positions) do
-        schedule(i * 300, function()
-            if not g_game.getCreatureByName(followTarget) then
-                local tile = g_map.getTile(pos)
-                if tile then
-                    local item = tile:getTopUseThing()
-                    if item then
-                        g_game.use(item)
-                    end
-                end
-            else
-                isSearching = false
-            end
-        end)
-    end
+Campo de Texto (Input Text): "Nome do Líder".
 
-    local spellDelay = (#positions * 300) + 200
-    schedule(spellDelay, function() if not g_game.getCreatureByName(followTarget) then say('exani tera') end end)
-    schedule(spellDelay + 500, function() if not g_game.getCreatureByName(followTarget) then say('exani hur "up"') end end)
-    schedule(spellDelay + 1000, function()
-        if not g_game.getCreatureByName(followTarget) then
-            say('exani hur "down"')
-        end
-        schedule(2000, function() isSearching = false end)
-    end)
-end
+Checkboxes (Caixas de Seleção) de Ação do Líder:
 
-onCreaturePositionChange(function(creature, newPos, oldPos)
-    if not followMacro.isOn() or not creature or creature:getName() ~= followTarget then return end
-    lastPos = oldPos
-    lastDirection = creature:getDirection()
-end)
+Follow (Seguir)
 
-onDisappear(function(creature)
-    if not followMacro.isOn() or not creature or creature:getName() ~= followTarget then return end
-    lastPos = creature:getPosition()
-end)
+Autopar (Parada Automática)
+
+Use Things (Copiar uso de itens/escadas)
+
+Move All (Replicar movimento WSAD)
+
+Target Bot (Ligar/Desligar o Target dos seguidores)
+
+Hold Target (Manter o Alvo)
+
+Leader Target (Atacar o mesmo alvo do líder)
+
+Anti Push
+
+Revid (Revidar ataques)
+
+Abas de Configuração: Crie abas como "Main", "Hotkeys", "Cave Settings".
+
+Sistema de Salvamento: Inclua funções para salvar e carregar as configurações (nome do líder, estado dos checkboxes, hotkeys, etc.) em um arquivo JSON.
+
+Exemplo de como pedir:
+"Comece criando a estrutura da janela principal e os elementos da UI na aba 'Main' usando a biblioteca de UI do OTCv8. Implemente a funcionalidade de salvar/carregar as configurações."
+
+Módulo 2: Sistema de Comunicação (Bot Server)
+
+Este é o núcleo da coordenação. Os personagens precisam se comunicar.
+
+Conexão com o Servidor Local:
+
+Implemente a lógica para que cada personagem se conecte a um "bot server" local (simulado ou real, a lógica é enviar e receber mensagens). Use um canal (ex: channel 1) para que apenas os personagens do mesmo grupo se comuniquem.
+
+Envio de Comandos:
+
+Quando o líder clica em um botão (ex: Follow), o script deve enviar um comando padronizado para o canal. Ex: {"action": "follow", "status": true}.
+
+Recebimento e Execução de Comandos:
+
+O script nos personagens seguidores deve estar "ouvindo" o canal. Ao receber um comando, ele deve executar a ação correspondente. Ex: ao receber {"action": "follow", "status": true}, a função de seguir o líder é ativada.
+
+Exemplo de como pedir:
+"Agora, escreva o código Lua para a comunicação. Crie uma função sendCommand(command) para o líder e um loop onMessage(message) para os seguidores processarem os comandos recebidos. Os comandos devem ser em formato JSON."
+
+Módulo 3: Lógica de Movimento e Posição
+
+Implemente as principais funções de movimento.
+
+Follow (Seguir):
+
+A função principal onde os seguidores mantêm uma distância segura do líder, andando em sua direção. Deve ser inteligente para não travar em paredes.
+
+Move All (Mover Todos):
+
+Quando ativado no líder, capture os eventos de teclado (W, A, S, D) e retransmita-os para os seguidores, que devem executar o mesmo passo na mesma direção.
+
+Walk Command (Comando de Andar):
+
+Crie uma hotkey que, quando pressionada pelo líder, envia as coordenadas do mouse para os seguidores. Os seguidores devem então andar para essa posição exata no mapa.
+
+Make Line (Fazer Linha):
+
+Crie uma hotkey que, quando pressionada pelo líder, faz com que os seguidores se posicionem em uma linha reta na direção para a qual o líder está olhando.
+
+Exemplo de como pedir:
+"Implemente as funções de movimento. Comece com a lógica de follow. Depois, crie a função moveAll que replica os passos do líder. Por fim, adicione as hotkeys para walkCommand e makeLine."
+
+Módulo 4: Sistema de Combate Coordenado
+
+Esta parte lida com os ataques em grupo.
+
+Leader Target (Alvo do Líder):
+
+Quando o líder ataca uma criatura, envie o ID dessa criatura para os seguidores. Os seguidores devem imediatamente mudar seu alvo para essa criatura.
+
+Combo de Runa (ex: SD):
+
+Crie uma hotkey que, quando pressionada pelo líder, envia um comando de "combo de runa". Todos os seguidores devem usar a runa configurada (ex: Sudden Death) no alvo atual.
+
+Combo de Magia (ex: UE):
+
+Similar ao combo de runa, mas para uma magia. Crie uma hotkey que comanda todos os seguidores a lançarem uma magia específica (ex: Exevo Gran Mas Vis).
+
+Vocation Awareness (Consciência de Vocação):
+
+Adicione uma configuração para definir a vocação de cada personagem. O script deve usar essa informação para ajustar os combos (ex: um Paladino usa "Exori San" enquanto um Sorcerer usa "Exori Gran Vis" no mesmo combo).
+
+Exemplo de como pedir:
+"Agora, vamos focar no combate. Crie o sistema leaderTarget. Em seguida, implemente as hotkeys de combo para runas e magias, garantindo que os seguidores executem a ação no alvo sincronizado. Adicione um seletor de vocação para diferenciar as ações."
+
+Módulo 5: Funções de Automação e Utilidades (QoL)
+
+Implemente os recursos adicionais que tornam o script robusto.
+
+Refill (Reabastecer):
+
+Na aba "Cave Settings", crie campos para o usuário listar itens e quantidades a serem comprados.
+
+Crie um comando ou botão Refill que, quando ativado perto de um NPC, faz com que todos os personagens comprem os suprimentos listados até atingirem a capacidade definida.
+
+Comandos via Chat:
+
+Monitore o chat do líder. Se uma mensagem começar com um prefixo (ex: !), interprete-a como um comando.
+
+Implemente comandos como:
+
+!say Olá (todos os seguidores dizem "Olá").
+
+!deposit all (todos depositam seus itens no depot).
+
+!withdraw 5k (todos sacam 5.000 gps do banco).
+
+Loot Messenger (Mensageiro de Loot):
+
+Quando um seguidor abre um corpo e coleta um item valioso (de uma lista pré-definida), ele deve enviar uma mensagem privada para o líder informando o item que foi saqueado.
+
+Exemplo de como pedir:
+"Para finalizar, adicione as funções de utilidade. Programe a lógica de Refill baseada em uma lista de itens na UI. Depois, implemente o parser de comandos de chat para ações como depositar e sacar dinheiro. Por último, crie o sistema de notificação de loot do seguidor para o líder."
+

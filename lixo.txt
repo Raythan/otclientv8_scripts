@@ -1,8 +1,8 @@
 --[[
-  SCRIPT AJUSTADO PARA SEGUIR O LÍDER SUBINDO E DESCENDO ANDARES
+  SCRIPT FINAL COM SISTEMA DE DETECÇÃO DE ERROS (TRY-CATCH)
 ]]
 
--- Interface (sem alterações)
+-- Interface
 UI.Label("Auto Follow")
 addTextEdit("followleader", storage.followLeader or "player name", function(widget, text)
   storage.followLeader = text
@@ -10,66 +10,92 @@ end)
 
 -- Variáveis de controle
 local toFollowPos = {}
-local stairToUse = nil -- Guarda a posição da escada/buraco que o líder usou
+local stairToUse = nil
+local followMacro = nil -- Apenas declaramos a variável aqui
+
+-- Função para mostrar o erro e desativar o script
+function handleError(errorTitle, errorMessage)
+  -- Se o macro existir e estiver ativo, desliga ele
+  if followMacro and followMacro.isOn and followMacro:isOn() then
+    followMacro:off()
+    -- Se houver um checkbox, pode ser necessário desmarcá-lo manualmente aqui
+    -- Ex: followCheckbox:setChecked(false)
+  end
+  -- Mostra a caixa de alerta para o usuário
+  UI.alert(errorTitle, "O script foi desativado automaticamente.\n\nPor favor, copie o erro abaixo e reporte:\n\n" .. tostring(errorMessage))
+end
 
 -- Macro principal de seguir
-local followMacro = macro(200, "Follow", function()
-  -- Interrompe tudo se o personagem já estiver andando
-  if player:isWalking() then return end
+followMacro = macro(200, "Follow", function()
+  -- Bloco de execução segura (try-catch)
+  local success, err = pcall(function()
+    ----------------------------------------------------------------
+    -- Início da Lógica Original do Macro
+    ----------------------------------------------------------------
+    if player:isWalking() then return end
+    local leader = getCreatureByName(storage.followLeader)
+    if not leader then return end
 
-  -- Tenta encontrar o líder na tela
-  local leader = getCreatureByName(storage.followLeader)
-  if not leader then return end
+    local ppos = player:getPosition()
+    local lpos = leader:getPosition()
 
-  local ppos = player:getPosition() -- Posição do nosso personagem
-  local lpos = leader:getPosition() -- Posição do líder
-
-  ----------------------------------------------------------------
-  -- PRIORIDADE 1: USAR ESCADAS/BURACOS
-  ----------------------------------------------------------------
-  -- Se uma escada/buraco foi detectada para uso...
-  if stairToUse then
-    -- Se já estamos no local exato da escada, usamos o tile
-    if ppos:isEqual(stairToUse) then
-      useGround(stairToUse) -- Tenta usar o chão (escada/buraco)
-      stairToUse = nil      -- Limpa a ação para não usar de novo
-      delay(500)            -- Dá um tempo para a mudança de andar acontecer
-    else
-      -- Se não, anda até o local exato da escada
-      autoWalk(stairToUse, 10, {precision=0})
+    -- PRIORIDADE 1: USAR ESCADAS/BURACOS
+    if stairToUse then
+      if ppos:isEqual(stairToUse) then
+        useGround(stairToUse)
+        stairToUse = nil
+        delay(500)
+      else
+        autoWalk(stairToUse, 10, {precision=0})
+      end
+      return
     end
-    return -- Para a execução aqui para focar na mudança de andar
-  end
 
-  ----------------------------------------------------------------
-  -- PRIORIDADE 2: SEGUIR NORMALMENTE NO MESMO ANDAR
-  ----------------------------------------------------------------
-  -- Apenas segue se estivermos no mesmo andar (mesmo valor de Z)
-  if ppos.z == lpos.z then
-    -- Anda em direção ao líder se estivermos a mais de 2 tiles de distância
-    if ppos:distance(lpos) > 2 then
-      autoWalk(lpos, 20, {ignoreNonPathable=false, precision=2, marginMin=1, marginMax=2})
-      delay(100)
+    -- PRIORIDADE 2: SEGUIR NORMALMENTE
+    if ppos.z == lpos.z then
+      if ppos:distance(lpos) > 2 then
+        autoWalk(lpos, 20, {ignoreNonPathable=false, precision=2, marginMin=1, marginMax=2})
+        delay(100)
+      end
     end
+    ----------------------------------------------------------------
+    -- Fim da Lógica Original do Macro
+    ----------------------------------------------------------------
+  end)
+
+  -- Se a execução segura falhou (success == false), chama a função de erro
+  if not success then
+    handleError("Erro no Macro de Follow", err)
   end
 end)
 
--- Gatilho que observa a mudança de posição das criaturas
+-- Gatilho que observa a mudança de posição
 onCreaturePositionChange(function(creature, oldPos, newPos)
-  -- Verifica se a criatura que se moveu é o nosso líder
-  if creature:getName() == storage.followLeader then
-    -- Atualiza a última posição conhecida do líder
-    toFollowPos[newPos.z] = newPos
-
-    -- !!! A MÁGICA ACONTECE AQUI !!!
-    -- Detecta se o líder mudou de andar (Z diferente)
-    -- e se a mudança ocorreu no mesmo andar em que estamos agora.
-    if newPos.z ~= oldPos.z and oldPos.z == player:getPosition().z then
-      -- A "posição antiga" (oldPos) do líder é exatamente
-      -- onde está a escada/buraco que ele usou.
-      stairToUse = oldPos
+  -- Bloco de execução segura para o gatilho também
+  local success, err = pcall(function()
+    if creature:getName() == storage.followLeader then
+      toFollowPos[newPos.z] = newPos
+      if newPos.z ~= oldPos.z and oldPos.z == player:getPosition().z then
+        stairToUse = oldPos
+      end
     end
+  end)
+
+  -- Se falhar, também desativa o script e mostra o erro
+  if not success then
+    handleError("Erro no Evento de Posição", err)
   end
 end)
+
+-- Checkbox para ativar/desativar o macro
+UI.Checkbox("Ativar Follow", function(widget, checked)
+  if checked then
+    followMacro:on()
+  else
+    followMacro:off()
+  end
+end)
+-- Inicia o macro desativado por padrão
+followMacro:off()
 
 UI.Separator()

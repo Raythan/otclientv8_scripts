@@ -1,131 +1,174 @@
-local followWindow = nil
-local followButton = nil
-local targetNameInput = nil
-local stopButton = nil
-local followEvent = nil
-local targetName = nil
+-- RAYTHAN
+--Funcionando travou o gráfico
+--4o
+--Girando para usar hur up/down
+Follow = macro(1000, "Follow", function()
+    nome = storage.followLeader
+end)
 
-function followTarget()
-    if not targetName or not g_game.isOnline() then
-        stopFollow()
-        return
-    end
+UI.Label("Follow Player:")
+addTextEdit("playerToFollow", storage.followLeader or "Heeey", function(widget, text)
+    storage.followLeader = text
+    followTarget = tostring(text)
+end)
 
-    local creature = g_game.getCreatureByName(targetName)
-    if creature then
-        if g_game.getFollowingCreature() ~= creature then
-            g_game.follow(creature)
+nome = storage.followLeader
+pos_p = player:getPosition()
+p = getCreatureByName(nome)
+
+local function useObjectsAroundLeader()
+    if Follow.isOn() and lastPos ~= nil and (player:getPosition().z ~= lastPos.z) then
+        -- Verificar se o personagem está na mesma posição que o líder
+        local playerPos = player:getPosition()
+        if playerPos.x ~= lastPos.x or playerPos.y ~= lastPos.y or playerPos.z ~= lastPos.z then
+            autoWalk(lastPos)
+            
+            schedule(1000, function() -- Aguarda 1 segundo para garantir que o jogador tentou caminhar até a posição
+                local updatedPlayerPos = player:getPosition()
+                if updatedPlayerPos.x == lastPos.x and updatedPlayerPos.y == lastPos.y and updatedPlayerPos.z == lastPos.z then
+                    -- Usar objetos em uma matriz de 9 posições ao redor da última posição conhecida do líder com atraso
+                    local positions = {
+                        {x = lastPos.x - 1, y = lastPos.y - 1, z = lastPos.z},
+                        {x = lastPos.x,     y = lastPos.y - 1, z = lastPos.z},
+                        {x = lastPos.x + 1, y = lastPos.y - 1, z = lastPos.z},
+                        {x = lastPos.x - 1, y = lastPos.y,     z = lastPos.z},
+                        {x = lastPos.x,     y = lastPos.y,     z = lastPos.z},
+                        {x = lastPos.x + 1, y = lastPos.y,     z = lastPos.z},
+                        {x = lastPos.x - 1, y = lastPos.y + 1, z = lastPos.z},
+                        {x = lastPos.x,     y = lastPos.y + 1, z = lastPos.z},
+                        {x = lastPos.x + 1, y = lastPos.y + 1, z = lastPos.z}
+                    }
+                    
+                    for i, pos in ipairs(positions) do
+                        schedule(i * 400, function()
+                            local useTile = g_map.getTile(pos)
+                            if useTile then
+                                g_game.use(useTile:getTopUseThing())
+                            end
+                            -- Tentar usar as magias "exani tera", "exani hur "up"" e "exani hur "down"" na última posição conhecida do líder
+                            if i == #positions then
+                                say('exani tera')
+                                schedule(300, function()
+                                    say('exani hur "up')
+                                end)
+                                schedule(600, function()
+                                    say('exani hur "down')
+                                end)
+                            end
+                        end)
+                    end
+                end
+            end)
+        else
+            -- Se o jogador já está na posição correta, usar os objetos imediatamente com atraso
+            local positions = {
+                {x = lastPos.x - 1, y = lastPos.y - 1, z = lastPos.z},
+                {x = lastPos.x,     y = lastPos.y - 1, z = lastPos.z},
+                {x = lastPos.x + 1, y = lastPos.y - 1, z = lastPos.z},
+                {x = lastPos.x - 1, y = lastPos.y,     z = lastPos.z},
+                {x = lastPos.x,     y = lastPos.y,     z = lastPos.z},
+                {x = lastPos.x + 1, y = lastPos.y,     z = lastPos.z},
+                {x = lastPos.x - 1, y = lastPos.y + 1, z = lastPos.z},
+                {x = lastPos.x,     y = lastPos.y + 1, z = lastPos.z},
+                {x = lastPos.x + 1, y = lastPos.y + 1, z = lastPos.z}
+            }
+
+            for i, pos in ipairs(positions) do
+                schedule(i * 400, function()
+                    local useTile = g_map.getTile(pos)
+                    if useTile then
+                        g_game.use(useTile:getTopUseThing())
+                    end
+                    -- Tentar usar as magias "exani tera", "exani hur "up"" e "exani hur "down"" na última posição conhecida do líder
+                    if i == #positions then
+                        say('exani tera')
+                        schedule(300, function()
+                            say('exani hur "up')
+                        end)
+                        schedule(600, function()
+                            say('exani hur "down')
+                        end)
+                    end
+                end)
+            end
         end
-    else
-        g_game.cancelFollow()
+        -- Reagendar a si mesmo para continuar o loop com maior intervalo
+        schedule(600, useObjectsAroundLeader)
     end
 end
 
-function startFollow(name)
-    if followEvent then
-        stopFollow()
-    end
-    targetName = name
-    if targetName and #targetName > 0 then
-        followEvent = cycleEvent(followTarget, 500)
-        g_game.talk("Following: " .. targetName)
-        followTarget()
-    end
-end
-
-function stopFollow()
-    if followEvent then
-        removeEvent(followEvent)
-        followEvent = nil
-        g_game.cancelFollow()
-        if targetName then
-            g_game.talk("Stopped following: " .. targetName)
-            targetName = nil
+onCreaturePositionChange(function(creature, newPos, oldPos)
+    if Follow.isOn() then
+        -- Quando a posição do jogador muda
+        if creature:getName() == player:getName() and getCreatureByName(nome) == nil and newPos and oldPos and newPos.z > oldPos.z then
+            say('exani tera')
+            for i = -1, 1 do
+                for j = -1, 1 do
+                    local useTile = g_map.getTile({x = posx() + i, y = posy() + j, z = posz()})
+                    if useTile then
+                        g_game.use(useTile:getTopUseThing())
+                    end
+                end
+            end
         end
+
+        -- Quando a posição do líder muda
+        if creature:getName() == nome then
+            lastDirection = creature:getDirection()
+            if newPos == nil and oldPos then
+                lastPos = oldPos
+
+                schedule(200, function()
+                    autoWalk(oldPos)
+                end)
+
+                schedule(1000, function()
+                    for i = -1, 1 do
+                        for j = -1, 1 do
+                            local useTile = g_map.getTile({x = posx() + i, y = posy() + j, z = posz()})
+                            if useTile then
+                                g_game.use(useTile:getTopUseThing())
+                            end
+                        end
+                    end
+                end)
+            end
+
+            if newPos and oldPos and oldPos.z == newPos.z then
+                schedule(300, function()
+                    local useTile = g_map.getTile({x = oldPos.x, y = oldPos.y, z = oldPos.z})
+                    if useTile then
+                        local topThing = useTile:getTopThing()
+                        if not useTile:isWalkable() then
+                            use(topThing)
+                        end
+                    end
+                end)
+                autoWalk({x = oldPos.x, y = oldPos.y, z = oldPos.z})
+            elseif newPos and oldPos then
+                lastPos = oldPos
+                autoWalk(oldPos)
+                for i = 1, 6 do
+                    schedule(i * 200, function()
+                        autoWalk(oldPos)
+                        if getDistanceBetween(pos(), oldPos) == 0 and (posz() > newPos.z and getCreatureByName(nome) == nil) then
+                            say('exani tera')
+                        end
+                    end)
+                end
+                local useTile = g_map.getTile({x = newPos.x, y = newPos.y - 1, z = oldPos.z})
+                if useTile then
+                    g_game.use(useTile:getTopUseThing())
+                end
+            end
+        end
+
+        -- Aplicar a direção do líder
+        if lastDirection ~= nil then
+            turn(lastDirection)
+        end
+
+        -- Iniciar o loop contínuo com maior intervalo
+        schedule(300, useObjectsAroundLeader)
     end
-end
-
-function toggle()
-    if followWindow and followWindow:isVisible() then
-        followWindow:hide()
-    else
-        init()
-        followWindow:show()
-        followWindow:raise()
-        followWindow:focus()
-    end
-end
-
-function init()
-    if followWindow then
-        return
-    end
-
-    followWindow = g_ui.createWidget('UIWindow')
-    followWindow:setText('Follow Player')
-    followWindow:setSize(200, 100)
-    followWindow:setAnchorHorizontalCenter('parent.horizontalCenter')
-    followWindow:setAnchorVerticalCenter('parent.verticalCenter')
-    followWindow.onClose = toggle
-
-    targetNameInput = g_ui.createWidget('UITextEdit', followWindow)
-    targetNameInput:setAnchorTop('parent.top')
-    targetNameInput:setAnchorLeft('parent.left')
-    targetNameInput:setAnchorRight('parent.right')
-    targetNameInput:setMarginTop(5)
-    targetNameInput:setMarginLeft(5)
-    targetNameInput:setMarginRight(5)
-
-    followButton = g_ui.createWidget('UIButton', followWindow)
-    followButton:setText('Follow')
-    followButton:setAnchorLeft('parent.left')
-    followButton:setAnchorBottom('parent.bottom')
-    followButton:setMarginLeft(5)
-    followButton:setMarginBottom(5)
-    followButton:setWidth(90)
-    followButton.onClick = function()
-        startFollow(targetNameInput:getText())
-    end
-
-    stopButton = g_ui.createWidget('UIButton', followWindow)
-    stopButton:setText('Stop')
-    stopButton:setAnchorRight('parent.right')
-    stopButton:setAnchorBottom('parent.bottom')
-    stopButton:setMarginRight(5)
-    stopButton:setMarginBottom(5)
-    stopButton:setWidth(90)
-    stopButton.onClick = function()
-        stopFollow()
-    end
-
-    followWindow:hide() -- Hide window initially, toggle will show it
-end
-
-function terminate()
-    if followWindow then
-        followWindow:destroy()
-        followWindow = nil
-    end
-    if openFollowWindowButton then
-        openFollowWindowButton:destroy()
-        openFollowWindowButton = nil
-    end
-    stopFollow()
-end
-
--- Create a button to open the follow window
-openFollowWindowButton = g_ui.createWidget('UIButton', g_ui.getRootWidget())
-openFollowWindowButton:setText('Follow')
-openFollowWindowButton:setAnchorTop('parent.top')
-openFollowWindowButton:setAnchorRight('parent.right')
-openFollowWindowButton:setMarginTop(10)
-openFollowWindowButton:setMarginRight(100)
-openFollowWindowButton.onClick = toggle
-
--- Call init to create the window structure but keep it hidden
-init()
-
--- Cleanup when script is unloaded
-g_game.onGameEnd(function()
-  terminate()
 end)

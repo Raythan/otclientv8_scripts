@@ -1,116 +1,59 @@
---[[
-  SCRIPT OTIMIZADO - V2
-  - Tempo de execução do macro reduzido para resposta mais rápida.
-  - Delays fixos removidos para uma movimentação mais fluida.
-  - Sistema de tentativas aprimorado para desativar em caso de exceção.
-]]
+local targetName = nil
+local followEvent = nil
 
--- Interface
-UI.Label("Auto Follow")
-addTextEdit("followleader", storage.followLeader or "player name", function(widget, text)
-  storage.followLeader = text
-end)
+function followTarget()
+    if not targetName or not g_game.isOnline() then
+        stopFollow()
+        return
+    end
 
--- Variáveis Globais
-local toFollowPos = {}
-local stairToUse = nil
-local followMacro = nil
-local followCheckbox = nil
-
--- Controle de Erros
-local errorCount = 0
-local MAX_ERRORS = 5 -- Desativa o macro após 5 falhas consecutivas
-
--- Função centralizada para parar o macro e redefinir o estado
-function stopFollowing()
-  if followMacro and followMacro.isOn and followMacro:isOn() then
-    followMacro:off()
-  end
-  if followCheckbox and followCheckbox:isChecked() then
-    followCheckbox:setChecked(false)
-  end
-  -- Zera a contagem de erros sempre que o macro é desativado
-  errorCount = 0
-  stairToUse = nil
+    local creature = g_game.getCreatureByName(targetName)
+    if creature then
+        if g_game.getFollowingCreature() ~= creature then
+            g_game.follow(creature)
+        end
+    else
+        g_game.cancelFollow()
+    end
 end
 
--- Gatilho de mudança de posição (protegido por pcall)
-onCreaturePositionChange(function(creature, oldPos, newPos)
-  local success, err = pcall(function()
-    if creature and creature:getName() == storage.followLeader then
-      toFollowPos[newPos.z] = newPos
-      -- Define a escada a ser usada apenas se o líder mudar de andar e estivermos no mesmo andar que ele estava
-      if newPos.z ~= oldPos.z and oldPos.z == player:getPosition().z then
-        stairToUse = oldPos
-      end
+function startFollow(name)
+    if followEvent then
+        stopFollow()
     end
-  end)
+    targetName = name
+    followEvent = cycleEvent(followTarget, 500)
+    g_game.talk("Following: " .. targetName)
+    followTarget()
+end
 
-  if not success then
-    print("Erro em onCreaturePositionChange: " .. tostring(err))
-    errorCount = errorCount + 1
-    if errorCount >= MAX_ERRORS then
-      print("Muitos erros detectados. Desativando o Auto Follow.")
-      stopFollowing()
+function stopFollow()
+    if followEvent then
+        removeEvent(followEvent)
+        followEvent = nil
+        g_game.cancelFollow()
+        if targetName then
+            g_game.talk("Stopped following: " .. targetName)
+            targetName = nil
+        end
     end
-  end
-end)
+end
 
--- Macro principal de seguir (mais rápido)
-followMacro = macro(100, "Follow", function() -- Reduzido para 100ms para maior responsividade
-  local success, err = pcall(function()
-    if player:isWalking() then return end
-
-    local leader = getCreatureByName(storage.followLeader)
-    if not leader then return end
-
-    local ppos = player:getPosition()
-
-    -- PRIORIDADE 1: Mudar de andar
-    if stairToUse then
-      if ppos:isEqual(stairToUse) then
-        useGround(stairToUse)
-        stairToUse = nil -- Limpa a escada após o uso
-      else
-        autoWalk(stairToUse, 1, {precision=0}) -- Caminha até a escada
-      end
-      return
+function onTextMessage(mode, text)
+    if text:sub(1, 8) == "/follow " then
+        local name = text:sub(9)
+        if name and #name > 0 then
+            startFollow(name)
+        end
+        return false
+    elseif text == "/follow" then
+        stopFollow()
+        return false
     end
+    return true
+end
 
-    -- PRIORIDADE 2: Seguir no mesmo andar
-    local lpos = leader:getPosition()
-    if ppos.z == lpos.z and ppos:distance(lpos) > 2 then
-      -- O autoWalk gerencia o delay da caminhada, não é necessário delay extra
-      autoWalk(lpos, 1, {ignoreNonPathable=true, precision=1, marginMin=1, marginMax=2})
-    end
-
-    -- Se a lógica foi executada com sucesso, zera o contador de erros.
-    errorCount = 0
-  end)
-
-  -- Se a execução falhou (exceção), lida com o erro.
-  if not success then
-    print("Erro na execução do macro Follow: " .. tostring(err))
-    errorCount = errorCount + 1
-    -- Desativa imediatamente se o limite de erros for atingido
-    if errorCount >= MAX_ERRORS then
-      print("Muitos erros detectados. Desativando o Auto Follow.")
-      stopFollowing()
-    end
-  end
-end)
-
--- Checkbox para controle manual
-followCheckbox = UI.Checkbox("Ativar Follow", function(widget, checked)
-  if checked then
-    errorCount = 0 -- Zera os erros ao ativar manualmente
-    followMacro:on()
-  else
-    stopFollowing() -- Usa a função central para garantir que tudo seja desligado
-  end
-end)
-
--- Garante que o macro comece desligado na inicialização do script
-followMacro:off()
-
-UI.Separator()
+connect(g_game, {
+    onGameEnd = stopFollow,
+    onTextMessage = onTextMessage
+})

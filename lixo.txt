@@ -1,131 +1,104 @@
-local followWindow = nil
-local followButton = nil
-local targetNameInput = nil
-local stopButton = nil
-local followEvent = nil
-local targetName = nil
+local lastPos = nil
+local lastDirection = nil
+local followTarget = storage.followLeader or ""
 
-function followTarget()
-    if not targetName or not g_game.isOnline() then
-        stopFollow()
+local followMacro = macro(1000, "Follow", function()
+    if not g_game.isOnline() then
+        followMacro:turnOff()
         return
     end
 
-    local creature = g_game.getCreatureByName(targetName)
-    if creature then
-        if g_game.getFollowingCreature() ~= creature then
-            g_game.follow(creature)
+    followTarget = storage.followLeader
+    local leader = g_game.getCreatureByName(followTarget)
+
+    if leader then
+        g_game.follow(leader)
+        lastPos = leader:getPosition()
+        lastDirection = leader:getDirection()
+    elseif lastPos then
+        g_game.walk(lastPos)
+    end
+end)
+
+UI.Label("Follow Player:")
+addTextEdit("playerToFollow", storage.followLeader or "", function(widget, text)
+    storage.followLeader = text
+    followTarget = text
+end)
+
+local function useNearbyItemsAndSpells(centerPos)
+    local positions = {
+        { x = centerPos.x - 1, y = centerPos.y - 1, z = centerPos.z },
+        { x = centerPos.x,     y = centerPos.y - 1, z = centerPos.z },
+        { x = centerPos.x + 1, y = centerPos.y - 1, z = centerPos.z },
+        { x = centerPos.x - 1, y = centerPos.y,     z = centerPos.z },
+        { x = centerPos.x,     y = centerPos.y,     z = centerPos.z },
+        { x = centerPos.x + 1, y = centerPos.y,     z = centerPos.z },
+        { x = centerPos.x - 1, y = centerPos.y + 1, z = centerPos.z },
+        { x = centerPos.x,     y = centerPos.y + 1, z = centerPos.z },
+        { x = centerPos.x + 1, y = centerPos.y + 1, z = centerPos.z }
+    }
+
+    for i, pos in ipairs(positions) do
+        schedule(i * 150, function()
+            local tile = g_map.getTile(pos)
+            if tile then
+                local item = tile:getTopUseThing()
+                if item then
+                    g_game.use(item)
+                end
+            end
+
+            if i == #positions then
+                schedule(100, function() say('exani tera') end)
+                schedule(400, function() say('exani hur "up"') end)
+                schedule(700, function() say('exani hur "down"') end)
+            end
+        end)
+    end
+end
+
+onCreaturePositionChange(function(creature, newPos, oldPos)
+    if not followMacro.isOn() then return end
+    if not creature then return end
+
+    if creature:getName() == followTarget then
+        lastPos = oldPos
+        lastDirection = creature:getDirection()
+
+        if player:getPosition() ~= oldPos then
+             autoWalk(oldPos)
         end
-    else
-        g_game.cancelFollow()
-    end
-end
 
-function startFollow(name)
-    if followEvent then
-        stopFollow()
-    end
-    targetName = name
-    if targetName and #targetName > 0 then
-        followEvent = cycleEvent(followTarget, 500)
-        g_game.talk("Following: " .. targetName)
-        followTarget()
-    end
-end
-
-function stopFollow()
-    if followEvent then
-        removeEvent(followEvent)
-        followEvent = nil
-        g_game.cancelFollow()
-        if targetName then
-            g_game.talk("Stopped following: " .. targetName)
-            targetName = nil
+    elseif creature:isLocalPlayer() then
+        if getCreatureByName(followTarget) == nil and lastPos and (newPos.z ~= lastPos.z) then
+            schedule(200, function()
+                if getCreatureByName(followTarget) == nil then
+                    useNearbyItemsAndSpells(player:getPosition())
+                end
+            end)
         end
     end
-end
+end)
 
-function toggle()
-    if followWindow and followWindow:isVisible() then
-        followWindow:hide()
-    else
-        init()
-        followWindow:show()
-        followWindow:raise()
-        followWindow:focus()
+onDisappear(function(creature)
+    if not followMacro.isOn() then return end
+    if not creature then return end
+
+    if creature:getName() == followTarget then
+        local lastKnownPos = creature:getPosition()
+        lastPos = lastKnownPos
+        
+        schedule(300, function()
+            if getCreatureByName(followTarget) == nil then
+                autoWalk(lastKnownPos)
+            end
+        end)
+
+        schedule(1000, function()
+            if getCreatureByName(followTarget) == nil and player:getPosition() == lastKnownPos then
+                 useNearbyItemsAndSpells(lastKnownPos)
+            end
+        end)
     end
-end
-
-function init()
-    if followWindow then
-        return
-    end
-
-    followWindow = g_ui.createWidget('UIWindow')
-    followWindow:setText('Follow Player')
-    followWindow:setSize(200, 100)
-    followWindow:setAnchorHorizontalCenter('parent.horizontalCenter')
-    followWindow:setAnchorVerticalCenter('parent.verticalCenter')
-    followWindow.onClose = toggle
-
-    targetNameInput = g_ui.createWidget('UITextEdit', followWindow)
-    targetNameInput:setAnchorTop('parent.top')
-    targetNameInput:setAnchorLeft('parent.left')
-    targetNameInput:setAnchorRight('parent.right')
-    targetNameInput:setMarginTop(5)
-    targetNameInput:setMarginLeft(5)
-    targetNameInput:setMarginRight(5)
-
-    followButton = g_ui.createWidget('UIButton', followWindow)
-    followButton:setText('Follow')
-    followButton:setAnchorLeft('parent.left')
-    followButton:setAnchorBottom('parent.bottom')
-    followButton:setMarginLeft(5)
-    followButton:setMarginBottom(5)
-    followButton:setWidth(90)
-    followButton.onClick = function()
-        startFollow(targetNameInput:getText())
-    end
-
-    stopButton = g_ui.createWidget('UIButton', followWindow)
-    stopButton:setText('Stop')
-    stopButton:setAnchorRight('parent.right')
-    stopButton:setAnchorBottom('parent.bottom')
-    stopButton:setMarginRight(5)
-    stopButton:setMarginBottom(5)
-    stopButton:setWidth(90)
-    stopButton.onClick = function()
-        stopFollow()
-    end
-
-    followWindow:hide() -- Hide window initially, toggle will show it
-end
-
-function terminate()
-    if followWindow then
-        followWindow:destroy()
-        followWindow = nil
-    end
-    if openFollowWindowButton then
-        openFollowWindowButton:destroy()
-        openFollowWindowButton = nil
-    end
-    stopFollow()
-end
-
--- Create a button to open the follow window
-openFollowWindowButton = g_ui.createWidget('UIButton', g_ui.getRootWidget())
-openFollowWindowButton:setText('Follow')
-openFollowWindowButton:setAnchorTop('parent.top')
-openFollowWindowButton:setAnchorRight('parent.right')
-openFollowWindowButton:setMarginTop(10)
-openFollowWindowButton:setMarginRight(100)
-openFollowWindowButton.onClick = toggle
-
--- Call init to create the window structure but keep it hidden
-init()
-
--- Cleanup when script is unloaded
-g_game.onGameEnd(function()
-  terminate()
 end)

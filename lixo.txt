@@ -64,28 +64,22 @@ function init()
     followWindow = g_ui.createWidget('UIWindow')
     followWindow:setText('Follow Player')
     followWindow:setSize(200, 100)
-    followWindow:setAnchors({
-        horizontalCenter = 'parent.horizontalCenter',
-        verticalCenter = 'parent.verticalCenter'
-    })
+    followWindow:setAnchorHorizontalCenter('parent.horizontalCenter')
+    followWindow:setAnchorVerticalCenter('parent.verticalCenter')
     followWindow.onClose = toggle
 
     targetNameInput = g_ui.createWidget('UITextEdit', followWindow)
-    targetNameInput:setAnchors({
-        top = 'parent.top',
-        left = 'parent.left',
-        right = 'parent.right'
-    })
+    targetNameInput:setAnchorTop('parent.top')
+    targetNameInput:setAnchorLeft('parent.left')
+    targetNameInput:setAnchorRight('parent.right')
     targetNameInput:setMarginTop(5)
     targetNameInput:setMarginLeft(5)
     targetNameInput:setMarginRight(5)
 
     followButton = g_ui.createWidget('UIButton', followWindow)
     followButton:setText('Follow')
-    followButton:setAnchors({
-        left = 'parent.left',
-        bottom = 'parent.bottom'
-    })
+    followButton:setAnchorLeft('parent.left')
+    followButton:setAnchorBottom('parent.bottom')
     followButton:setMarginLeft(5)
     followButton:setMarginBottom(5)
     followButton:setWidth(90)
@@ -95,10 +89,8 @@ function init()
 
     stopButton = g_ui.createWidget('UIButton', followWindow)
     stopButton:setText('Stop')
-    stopButton:setAnchors({
-        right = 'parent.right',
-        bottom = 'parent.bottom'
-    })
+    stopButton:setAnchorRight('parent.right')
+    stopButton:setAnchorBottom('parent.bottom')
     stopButton:setMarginRight(5)
     stopButton:setMarginBottom(5)
     stopButton:setWidth(90)
@@ -106,7 +98,7 @@ function init()
         stopFollow()
     end
 
-    toggle() -- Show window on first run
+    followWindow:hide() -- Hide window initially, toggle will show it
 end
 
 function terminate()
@@ -114,19 +106,26 @@ function terminate()
         followWindow:destroy()
         followWindow = nil
     end
+    if openFollowWindowButton then
+        openFollowWindowButton:destroy()
+        openFollowWindowButton = nil
+    end
     stopFollow()
 end
 
 -- Create a button to open the follow window
-local openFollowWindowButton = g_ui.createWidget('UIButton', g_ui.getRootWidget())
+openFollowWindowButton = g_ui.createWidget('UIButton', g_ui.getRootWidget())
 openFollowWindowButton:setText('Follow')
-openFollowWindowButton:setAnchors({ top = 'parent.top', right = 'parent.right' })
+openFollowWindowButton:setAnchorTop('parent.top')
+openFollowWindowButton:setAnchorRight('parent.right')
 openFollowWindowButton:setMarginTop(10)
 openFollowWindowButton:setMarginRight(100)
 openFollowWindowButton.onClick = toggle
 
+-- Call init to create the window structure but keep it hidden
+init()
+
 -- Cleanup when script is unloaded
 g_game.onGameEnd(function()
   terminate()
-  openFollowWindowButton:destroy()
 end)

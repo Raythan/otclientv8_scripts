@@ -1,22 +1,36 @@
 local lastPos = nil
 local lastDirection = nil
 local followTarget = storage.followLeader or ""
+local isSearching = false
 
-local followMacro = macro(1000, "Follow", function()
+local followMacro = macro(500, "Follow", function()
     if not g_game.isOnline() then
         followMacro:turnOff()
         return
     end
 
     followTarget = storage.followLeader
+    if not followTarget or followTarget == "" then
+        g_game.cancelFollow()
+        return
+    end
+
     local leader = g_game.getCreatureByName(followTarget)
+    local playerPos = player:getPosition()
 
     if leader then
+        isSearching = false
         g_game.follow(leader)
         lastPos = leader:getPosition()
         lastDirection = leader:getDirection()
     elseif lastPos then
-        g_game.walk(lastPos)
+        g_game.cancelFollow()
+        autoWalk(lastPos, 1, { precision = 0 })
+
+        if not isSearching and playerPos == lastPos and not g_game.getCreatureByName(followTarget) then
+            isSearching = true
+            useNearbyItemsAndSpells(lastPos)
+        end
     end
 end)
 
@@ -24,81 +38,58 @@ UI.Label("Follow Player:")
 addTextEdit("playerToFollow", storage.followLeader or "", function(widget, text)
     storage.followLeader = text
     followTarget = text
+    lastPos = nil
+    isSearching = false
+    g_game.cancelFollow()
 end)
 
-local function useNearbyItemsAndSpells(centerPos)
+function useNearbyItemsAndSpells(centerPos)
     local positions = {
-        { x = centerPos.x - 1, y = centerPos.y - 1, z = centerPos.z },
-        { x = centerPos.x,     y = centerPos.y - 1, z = centerPos.z },
-        { x = centerPos.x + 1, y = centerPos.y - 1, z = centerPos.z },
-        { x = centerPos.x - 1, y = centerPos.y,     z = centerPos.z },
         { x = centerPos.x,     y = centerPos.y,     z = centerPos.z },
+        { x = centerPos.x - 1, y = centerPos.y,     z = centerPos.z },
         { x = centerPos.x + 1, y = centerPos.y,     z = centerPos.z },
-        { x = centerPos.x - 1, y = centerPos.y + 1, z = centerPos.z },
+        { x = centerPos.x,     y = centerPos.y - 1, z = centerPos.z },
         { x = centerPos.x,     y = centerPos.y + 1, z = centerPos.z },
+        { x = centerPos.x - 1, y = centerPos.y - 1, z = centerPos.z },
+        { x = centerPos.x + 1, y = centerPos.y - 1, z = centerPos.z },
+        { x = centerPos.x - 1, y = centerPos.y + 1, z = centerPos.z },
         { x = centerPos.x + 1, y = centerPos.y + 1, z = centerPos.z }
     }
 
     for i, pos in ipairs(positions) do
-        schedule(i * 150, function()
-            local tile = g_map.getTile(pos)
-            if tile then
-                local item = tile:getTopUseThing()
-                if item then
-                    g_game.use(item)
+        schedule(i * 300, function()
+            if not g_game.getCreatureByName(followTarget) then
+                local tile = g_map.getTile(pos)
+                if tile then
+                    local item = tile:getTopUseThing()
+                    if item then
+                        g_game.use(item)
+                    end
                 end
-            end
-
-            if i == #positions then
-                schedule(100, function() say('exani tera') end)
-                schedule(400, function() say('exani hur "up"') end)
-                schedule(700, function() say('exani hur "down"') end)
+            else
+                isSearching = false
             end
         end)
     end
+
+    local spellDelay = (#positions * 300) + 200
+    schedule(spellDelay, function() if not g_game.getCreatureByName(followTarget) then say('exani tera') end end)
+    schedule(spellDelay + 500, function() if not g_game.getCreatureByName(followTarget) then say('exani hur "up"') end end)
+    schedule(spellDelay + 1000, function()
+        if not g_game.getCreatureByName(followTarget) then
+            say('exani hur "down"')
+        end
+        schedule(2000, function() isSearching = false end)
+    end)
 end
 
 onCreaturePositionChange(function(creature, newPos, oldPos)
-    if not followMacro.isOn() then return end
-    if not creature then return end
-
-    if creature:getName() == followTarget then
-        lastPos = oldPos
-        lastDirection = creature:getDirection()
-
-        if player:getPosition() ~= oldPos then
-             autoWalk(oldPos)
-        end
-
-    elseif creature:isLocalPlayer() then
-        if getCreatureByName(followTarget) == nil and lastPos and (newPos.z ~= lastPos.z) then
-            schedule(200, function()
-                if getCreatureByName(followTarget) == nil then
-                    useNearbyItemsAndSpells(player:getPosition())
-                end
-            end)
-        end
-    end
+    if not followMacro.isOn() or not creature or creature:getName() ~= followTarget then return end
+    lastPos = oldPos
+    lastDirection = creature:getDirection()
 end)
 
 onDisappear(function(creature)
-    if not followMacro.isOn() then return end
-    if not creature then return end
-
-    if creature:getName() == followTarget then
-        local lastKnownPos = creature:getPosition()
-        lastPos = lastKnownPos
-        
-        schedule(300, function()
-            if getCreatureByName(followTarget) == nil then
-                autoWalk(lastKnownPos)
-            end
-        end)
-
-        schedule(1000, function()
-            if getCreatureByName(followTarget) == nil and player:getPosition() == lastKnownPos then
-                 useNearbyItemsAndSpells(lastKnownPos)
-            end
-        end)
-    end
+    if not followMacro.isOn() or not creature or creature:getName() ~= followTarget then return end
+    lastPos = creature:getPosition()
 end)

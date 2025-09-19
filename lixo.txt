@@ -1,59 +1,34 @@
-local targetName = nil
-local followEvent = nil
+-- follow.otui
+FollowWindow < UIWindow
+  id: followWindow
+  !text: tr('Follow Player')
+  width: 200
+  height: 100
+  @onClose: Follow.toggle()
 
-function followTarget()
-    if not targetName or not g_game.isOnline() then
-        stopFollow()
-        return
-    end
+  UITextEdit
+    id: targetNameInput
+    anchors.top: parent.top
+    anchors.left: parent.left
+    anchors.right: parent.right
+    margin-top: 5
+    margin-left: 5
+    margin-right: 5
 
-    local creature = g_game.getCreatureByName(targetName)
-    if creature then
-        if g_game.getFollowingCreature() ~= creature then
-            g_game.follow(creature)
-        end
-    else
-        g_game.cancelFollow()
-    end
-end
+  UIButton
+    id: followButton
+    !text: tr('Follow')
+    anchors.left: parent.left
+    anchors.bottom: parent.bottom
+    margin-left: 5
+    margin-bottom: 5
+    width: 90
 
-function startFollow(name)
-    if followEvent then
-        stopFollow()
-    end
-    targetName = name
-    followEvent = cycleEvent(followTarget, 500)
-    g_game.talk("Following: " .. targetName)
-    followTarget()
-end
-
-function stopFollow()
-    if followEvent then
-        removeEvent(followEvent)
-        followEvent = nil
-        g_game.cancelFollow()
-        if targetName then
-            g_game.talk("Stopped following: " .. targetName)
-            targetName = nil
-        end
-    end
-end
-
-function onTextMessage(mode, text)
-    if text:sub(1, 8) == "/follow " then
-        local name = text:sub(9)
-        if name and #name > 0 then
-            startFollow(name)
-        end
-        return false
-    elseif text == "/follow" then
-        stopFollow()
-        return false
-    end
-    return true
-end
-
-connect(g_game, {
-    onGameEnd = stopFollow,
-    onTextMessage = onTextMessage
-})
+  UIButton
+    id: stopButton
+    !text: tr('Stop')
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    margin-right: 5
+    margin-bottom: 5
+    width: 90

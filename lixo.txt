@@ -1,6 +1,7 @@
 --[[
-  SCRIPT FINAL - VERSÃO SILENCIOSA
-  Desativa o macro automaticamente em caso de erro, sem exibir alertas.
+  SCRIPT CORRIGIDO COM SISTEMA DE TENTATIVAS E DELAY AUMENTADO
+  - Permite até 5 erros consecutivos antes de desativar.
+  - Aumenta o tempo de espera ao seguir para maior estabilidade.
 ]]
 
 -- Interface
@@ -9,26 +10,49 @@ addTextEdit("followleader", storage.followLeader or "player name", function(widg
   storage.followLeader = text
 end)
 
--- Variáveis
+-- Variáveis Globais do Script
 local toFollowPos = {}
 local stairToUse = nil
-local followMacro = nil
-local followCheckbox = nil -- Variável para guardar o checkbox da UI
+local followMacro = nil -- Declarado como nil aqui para existir em todo o script
+local followCheckbox = nil
 
--- Função simplificada para parar o script em caso de erro
+-- Controle de Erros
+local errorCount = 0
+local MAX_ERRORS = 5 -- O macro será desativado após 5 falhas seguidas
+
+-- Função para parar o script (agora funciona corretamente)
 function handleError()
   if followMacro and followMacro.isOn and followMacro:isOn() then
     followMacro:off()
-    -- Desmarca a caixa de seleção na interface para feedback visual
     if followCheckbox then
       followCheckbox:setChecked(false)
     end
+    -- Zera a contagem de erros ao desativar manualmente ou por falha
+    errorCount = 0
   end
 end
 
+-- Gatilho de mudança de posição (protegido)
+onCreaturePositionChange(function(creature, oldPos, newPos)
+  local success = pcall(function()
+    if creature and creature:getName() == storage.followLeader then
+      toFollowPos[newPos.z] = newPos
+      if newPos.z ~= oldPos.z and oldPos.z == player:getPosition().z then
+        stairToUse = oldPos
+      end
+    end
+  end)
+
+  if not success then
+    errorCount = errorCount + 1 -- Incrementa o erro
+    if errorCount >= MAX_ERRORS then
+      handleError()
+    end
+  end
+end)
+
 -- Macro principal de seguir
 followMacro = macro(200, "Follow", function()
-  -- pcall executa o código de forma protegida
   local success = pcall(function()
     -------------------------------------------------
     -- Início da Lógica Principal
@@ -38,58 +62,53 @@ followMacro = macro(200, "Follow", function()
     if not leader then return end
 
     local ppos = player:getPosition()
-    local lpos = leader:getPosition()
 
+    -- PRIORIDADE 1: Mudar de andar
     if stairToUse then
       if ppos:isEqual(stairToUse) then
         useGround(stairToUse)
         stairToUse = nil
-        delay(500)
+        delay(600) -- Pequeno delay extra para processar a mudança de andar
       else
         autoWalk(stairToUse, 10, {precision=0})
       end
       return
     end
 
+    -- PRIORIDADE 2: Seguir no mesmo andar
+    local lpos = leader:getPosition()
     if ppos.z == lpos.z and ppos:distance(lpos) > 2 then
       autoWalk(lpos, 20, {ignoreNonPathable=false, precision=2, marginMin=1, marginMax=2})
-      delay(100)
+      delay(400) -- << DELAY AUMENTADO PARA 400ms >>
     end
     -------------------------------------------------
     -- Fim da Lógica Principal
     -------------------------------------------------
+
+    -- Se tudo correu bem, zera o contador de erros.
+    errorCount = 0
   end)
 
-  -- Se a execução falhou (success == false), chama a função para parar tudo.
+  -- Se a execução falhou, lida com o erro.
   if not success then
-    handleError()
-  end
-end)
-
--- Gatilho de mudança de posição
-onCreaturePositionChange(function(creature, oldPos, newPos)
-  local success = pcall(function()
-    if creature:getName() == storage.followLeader then
-      toFollowPos[newPos.z] = newPos
-      if newPos.z ~= oldPos.z and oldPos.z == player:getPosition().z then
-        stairToUse = oldPos
-      end
+    errorCount = errorCount + 1
+    -- Apenas desativa se o limite de erros for atingido
+    if errorCount >= MAX_ERRORS then
+      handleError()
     end
-  end)
-
-  if not success then
-    handleError()
   end
 end)
 
 -- Checkbox para controle manual
 followCheckbox = UI.Checkbox("Ativar Follow", function(widget, checked)
   if checked then
+    errorCount = 0 -- Zera os erros ao ativar manualmente
     followMacro:on()
   else
-    followMacro:off()
+    handleError() -- Usa a função para garantir que tudo seja desligado corretamente
   end
 end)
+
 -- Garante que o macro comece desligado
 followMacro:off()
 

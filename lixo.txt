@@ -1,5 +1,6 @@
 --[[
-  SCRIPT FINAL COM SISTEMA DE DETECÇÃO DE ERROS (TRY-CATCH)
+  SCRIPT FINAL - VERSÃO SILENCIOSA
+  Desativa o macro automaticamente em caso de erro, sem exibir alertas.
 ]]
 
 -- Interface
@@ -8,30 +9,30 @@ addTextEdit("followleader", storage.followLeader or "player name", function(widg
   storage.followLeader = text
 end)
 
--- Variáveis de controle
+-- Variáveis
 local toFollowPos = {}
 local stairToUse = nil
-local followMacro = nil -- Apenas declaramos a variável aqui
+local followMacro = nil
+local followCheckbox = nil -- Variável para guardar o checkbox da UI
 
--- Função para mostrar o erro e desativar o script
-function handleError(errorTitle, errorMessage)
-  -- Se o macro existir e estiver ativo, desliga ele
+-- Função simplificada para parar o script em caso de erro
+function handleError()
   if followMacro and followMacro.isOn and followMacro:isOn() then
     followMacro:off()
-    -- Se houver um checkbox, pode ser necessário desmarcá-lo manualmente aqui
-    -- Ex: followCheckbox:setChecked(false)
+    -- Desmarca a caixa de seleção na interface para feedback visual
+    if followCheckbox then
+      followCheckbox:setChecked(false)
+    end
   end
-  -- Mostra a caixa de alerta para o usuário
-  UI.alert(errorTitle, "O script foi desativado automaticamente.\n\nPor favor, copie o erro abaixo e reporte:\n\n" .. tostring(errorMessage))
 end
 
 -- Macro principal de seguir
 followMacro = macro(200, "Follow", function()
-  -- Bloco de execução segura (try-catch)
-  local success, err = pcall(function()
-    ----------------------------------------------------------------
-    -- Início da Lógica Original do Macro
-    ----------------------------------------------------------------
+  -- pcall executa o código de forma protegida
+  local success = pcall(function()
+    -------------------------------------------------
+    -- Início da Lógica Principal
+    -------------------------------------------------
     if player:isWalking() then return end
     local leader = getCreatureByName(storage.followLeader)
     if not leader then return end
@@ -39,7 +40,6 @@ followMacro = macro(200, "Follow", function()
     local ppos = player:getPosition()
     local lpos = leader:getPosition()
 
-    -- PRIORIDADE 1: USAR ESCADAS/BURACOS
     if stairToUse then
       if ppos:isEqual(stairToUse) then
         useGround(stairToUse)
@@ -51,28 +51,24 @@ followMacro = macro(200, "Follow", function()
       return
     end
 
-    -- PRIORIDADE 2: SEGUIR NORMALMENTE
-    if ppos.z == lpos.z then
-      if ppos:distance(lpos) > 2 then
-        autoWalk(lpos, 20, {ignoreNonPathable=false, precision=2, marginMin=1, marginMax=2})
-        delay(100)
-      end
+    if ppos.z == lpos.z and ppos:distance(lpos) > 2 then
+      autoWalk(lpos, 20, {ignoreNonPathable=false, precision=2, marginMin=1, marginMax=2})
+      delay(100)
     end
-    ----------------------------------------------------------------
-    -- Fim da Lógica Original do Macro
-    ----------------------------------------------------------------
+    -------------------------------------------------
+    -- Fim da Lógica Principal
+    -------------------------------------------------
   end)
 
-  -- Se a execução segura falhou (success == false), chama a função de erro
+  -- Se a execução falhou (success == false), chama a função para parar tudo.
   if not success then
-    handleError("Erro no Macro de Follow", err)
+    handleError()
   end
 end)
 
--- Gatilho que observa a mudança de posição
+-- Gatilho de mudança de posição
 onCreaturePositionChange(function(creature, oldPos, newPos)
-  -- Bloco de execução segura para o gatilho também
-  local success, err = pcall(function()
+  local success = pcall(function()
     if creature:getName() == storage.followLeader then
       toFollowPos[newPos.z] = newPos
       if newPos.z ~= oldPos.z and oldPos.z == player:getPosition().z then
@@ -81,21 +77,20 @@ onCreaturePositionChange(function(creature, oldPos, newPos)
     end
   end)
 
-  -- Se falhar, também desativa o script e mostra o erro
   if not success then
-    handleError("Erro no Evento de Posição", err)
+    handleError()
   end
 end)
 
--- Checkbox para ativar/desativar o macro
-UI.Checkbox("Ativar Follow", function(widget, checked)
+-- Checkbox para controle manual
+followCheckbox = UI.Checkbox("Ativar Follow", function(widget, checked)
   if checked then
     followMacro:on()
   else
     followMacro:off()
   end
 end)
--- Inicia o macro desativado por padrão
+-- Garante que o macro comece desligado
 followMacro:off()
 
 UI.Separator()

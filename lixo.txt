@@ -1,0 +1,75 @@
+--[[
+  SCRIPT AJUSTADO PARA SEGUIR O LÍDER SUBINDO E DESCENDO ANDARES
+]]
+
+-- Interface (sem alterações)
+UI.Label("Auto Follow")
+addTextEdit("followleader", storage.followLeader or "player name", function(widget, text)
+  storage.followLeader = text
+end)
+
+-- Variáveis de controle
+local toFollowPos = {}
+local stairToUse = nil -- Guarda a posição da escada/buraco que o líder usou
+
+-- Macro principal de seguir
+local followMacro = macro(200, "Follow", function()
+  -- Interrompe tudo se o personagem já estiver andando
+  if player:isWalking() then return end
+
+  -- Tenta encontrar o líder na tela
+  local leader = getCreatureByName(storage.followLeader)
+  if not leader then return end
+
+  local ppos = player:getPosition() -- Posição do nosso personagem
+  local lpos = leader:getPosition() -- Posição do líder
+
+  ----------------------------------------------------------------
+  -- PRIORIDADE 1: USAR ESCADAS/BURACOS
+  ----------------------------------------------------------------
+  -- Se uma escada/buraco foi detectada para uso...
+  if stairToUse then
+    -- Se já estamos no local exato da escada, usamos o tile
+    if ppos:isEqual(stairToUse) then
+      useGround(stairToUse) -- Tenta usar o chão (escada/buraco)
+      stairToUse = nil      -- Limpa a ação para não usar de novo
+      delay(500)            -- Dá um tempo para a mudança de andar acontecer
+    else
+      -- Se não, anda até o local exato da escada
+      autoWalk(stairToUse, 10, {precision=0})
+    end
+    return -- Para a execução aqui para focar na mudança de andar
+  end
+
+  ----------------------------------------------------------------
+  -- PRIORIDADE 2: SEGUIR NORMALMENTE NO MESMO ANDAR
+  ----------------------------------------------------------------
+  -- Apenas segue se estivermos no mesmo andar (mesmo valor de Z)
+  if ppos.z == lpos.z then
+    -- Anda em direção ao líder se estivermos a mais de 2 tiles de distância
+    if ppos:distance(lpos) > 2 then
+      autoWalk(lpos, 20, {ignoreNonPathable=false, precision=2, marginMin=1, marginMax=2})
+      delay(100)
+    end
+  end
+end)
+
+-- Gatilho que observa a mudança de posição das criaturas
+onCreaturePositionChange(function(creature, oldPos, newPos)
+  -- Verifica se a criatura que se moveu é o nosso líder
+  if creature:getName() == storage.followLeader then
+    -- Atualiza a última posição conhecida do líder
+    toFollowPos[newPos.z] = newPos
+
+    -- !!! A MÁGICA ACONTECE AQUI !!!
+    -- Detecta se o líder mudou de andar (Z diferente)
+    -- e se a mudança ocorreu no mesmo andar em que estamos agora.
+    if newPos.z ~= oldPos.z and oldPos.z == player:getPosition().z then
+      -- A "posição antiga" (oldPos) do líder é exatamente
+      -- onde está a escada/buraco que ele usou.
+      stairToUse = oldPos
+    end
+  end
+end)
+
+UI.Separator()

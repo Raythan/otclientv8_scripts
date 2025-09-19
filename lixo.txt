@@ -1,34 +1,132 @@
--- follow.otui
-FollowWindow < UIWindow
-  id: followWindow
-  !text: tr('Follow Player')
-  width: 200
-  height: 100
-  @onClose: Follow.toggle()
+local followWindow = nil
+local followButton = nil
+local targetNameInput = nil
+local stopButton = nil
+local followEvent = nil
+local targetName = nil
 
-  UITextEdit
-    id: targetNameInput
-    anchors.top: parent.top
-    anchors.left: parent.left
-    anchors.right: parent.right
-    margin-top: 5
-    margin-left: 5
-    margin-right: 5
+function followTarget()
+    if not targetName or not g_game.isOnline() then
+        stopFollow()
+        return
+    end
 
-  UIButton
-    id: followButton
-    !text: tr('Follow')
-    anchors.left: parent.left
-    anchors.bottom: parent.bottom
-    margin-left: 5
-    margin-bottom: 5
-    width: 90
+    local creature = g_game.getCreatureByName(targetName)
+    if creature then
+        if g_game.getFollowingCreature() ~= creature then
+            g_game.follow(creature)
+        end
+    else
+        g_game.cancelFollow()
+    end
+end
 
-  UIButton
-    id: stopButton
-    !text: tr('Stop')
-    anchors.right: parent.right
-    anchors.bottom: parent.bottom
-    margin-right: 5
-    margin-bottom: 5
-    width: 90
+function startFollow(name)
+    if followEvent then
+        stopFollow()
+    end
+    targetName = name
+    if targetName and #targetName > 0 then
+        followEvent = cycleEvent(followTarget, 500)
+        g_game.talk("Following: " .. targetName)
+        followTarget()
+    end
+end
+
+function stopFollow()
+    if followEvent then
+        removeEvent(followEvent)
+        followEvent = nil
+        g_game.cancelFollow()
+        if targetName then
+            g_game.talk("Stopped following: " .. targetName)
+            targetName = nil
+        end
+    end
+end
+
+function toggle()
+    if followWindow and followWindow:isVisible() then
+        followWindow:hide()
+    else
+        init()
+        followWindow:show()
+        followWindow:raise()
+        followWindow:focus()
+    end
+end
+
+function init()
+    if followWindow then
+        return
+    end
+
+    followWindow = g_ui.createWidget('UIWindow')
+    followWindow:setText('Follow Player')
+    followWindow:setSize(200, 100)
+    followWindow:setAnchors({
+        horizontalCenter = 'parent.horizontalCenter',
+        verticalCenter = 'parent.verticalCenter'
+    })
+    followWindow.onClose = toggle
+
+    targetNameInput = g_ui.createWidget('UITextEdit', followWindow)
+    targetNameInput:setAnchors({
+        top = 'parent.top',
+        left = 'parent.left',
+        right = 'parent.right'
+    })
+    targetNameInput:setMarginTop(5)
+    targetNameInput:setMarginLeft(5)
+    targetNameInput:setMarginRight(5)
+
+    followButton = g_ui.createWidget('UIButton', followWindow)
+    followButton:setText('Follow')
+    followButton:setAnchors({
+        left = 'parent.left',
+        bottom = 'parent.bottom'
+    })
+    followButton:setMarginLeft(5)
+    followButton:setMarginBottom(5)
+    followButton:setWidth(90)
+    followButton.onClick = function()
+        startFollow(targetNameInput:getText())
+    end
+
+    stopButton = g_ui.createWidget('UIButton', followWindow)
+    stopButton:setText('Stop')
+    stopButton:setAnchors({
+        right = 'parent.right',
+        bottom = 'parent.bottom'
+    })
+    stopButton:setMarginRight(5)
+    stopButton:setMarginBottom(5)
+    stopButton:setWidth(90)
+    stopButton.onClick = function()
+        stopFollow()
+    end
+
+    toggle() -- Show window on first run
+end
+
+function terminate()
+    if followWindow then
+        followWindow:destroy()
+        followWindow = nil
+    end
+    stopFollow()
+end
+
+-- Create a button to open the follow window
+local openFollowWindowButton = g_ui.createWidget('UIButton', g_ui.getRootWidget())
+openFollowWindowButton:setText('Follow')
+openFollowWindowButton:setAnchors({ top = 'parent.top', right = 'parent.right' })
+openFollowWindowButton:setMarginTop(10)
+openFollowWindowButton:setMarginRight(100)
+openFollowWindowButton.onClick = toggle
+
+-- Cleanup when script is unloaded
+g_game.onGameEnd(function()
+  terminate()
+  openFollowWindowButton:destroy()
+end)

@@ -1,1 +1,611 @@
-# XP Obras — Prompt técnico para programadores (v1.0) ## Visão Geral Construir um **sistema web** para **gestão e planejamento de obras** usando como base os **itens EMOP** (Catálogo de Referência – 13ª Edição, nov/2023) e as **planilhas operacionais** do cliente: (1) **Planilha de Medição** da obra (PSAM/SEAS‑RJ), (2) **Memória de Cálculo**, (3) **Planilhas mensais** do EMOP (preços de referência). O sistema deve permitir **importar, validar, consolidar e analisar** dados **físico‑financeiros**, com rastreabilidade, aprovações e dashboards. --- ## Objetivos de Negócio 1. Centralizar cronograma, planejamento, memórias de cálculo e preços EMOP. 2. Garantir a integridade (limites contratados, unidades corretas, rastreabilidade/auditoria). 3. Acelerar o ciclo **Planejar → Medir → Analisar → Aprovar → Pagar**. 4. Fornecedor **KPIs executivos** (Curvas S, ABC, desvios, glosas, lead time) e relatórios. --- ## Escopo do MVP * Importação de **Catálogo EMOP** (itens, unidades, famílias) e **preços de referência** por competência (AAAAMM). * Cadastro de **Obra**, **Contrato** (com BDI/encargos) e **Lotes/Frentes**. * Importação e edição guiada da **Medição mensal** e sua **Memória de Cálculo**. * Fluxo de trabalho: rascunho → enviado → em análise (fiscal) → aprovado/glosado → pago. * Painéis: **Obra**, **Contrato**, **Medição**, **EMOP**, com Curva S e ABC. * Controle de **glosas** e **reajustes** contratuais. --- ## Requisitos Funcionais (MVP) 1. **Autenticação e perfis**: Admin, Planejamento, Engenharia (campo), Orçamento, Fiscalização, Financeiro. 2. **Obras/Contratos**: CRUD de Obra, Contrato, Lotes/Frentes; parâmetros de reajuste; BDI padrão. 3. **EMOP**: * Carga do Catálogo: `cod_emop`, descrição, unidade, família/subfamília, status. * Preços de referência mensais: `cod_emop`, competência (AAAAMM), `preco_unit_ref`. 4. **Cronograma (planejado)**: por item EMOP e lote; quantidade contratada, preço unitário contratual, metas mensais. 5. **Medição (realizada)**: * Importar planilha de medição mensal. * Editar/validar itens, quantidades e preços unitários (padrão do contrato). * Vínculo com **Memória de Cálculo** (critérios, comprovação, fotos/links). 6. **Glosas e Aprovação**: registrador motivo/valor, responsável, status; trilha de auditório. 7. **Pagamentos**: liquidação por medição; valor e documento fiscal total. 8. **Relatórios/Dashboards**: Curva S (físico/financeiro), ABC, desvio vs planejado e vs EMOP, lead time. 9. **Auditoria**: registrador de todas as alterações de dados críticos. --- ## Regras de Negócio * **Chave de referência**: `cod_emop` (string oficial do EMOP). Medições e cronograma referenciam **(cod_emop + id_lote)**. * **Competência**: todos os registros mensais usam **AAAAMM**. * **Limite**: soma das medidas ≤ quantidade contratada por (item, lote). * **Preço**: preço unitário da medição = preço contratual (exceções de exclusão justificativa e registro). * **Unidades**: conformidade com a unidade oficial do item EMOP.* **Memória obrigatória**: família/subfamília marcada como críticas excluídas memória de projeto preenchido. * **Reajuste**: aplique índices conforme contrato e eventos de reajuste registrados. --- ## Modelo de Dados (resumo) **Entidades principais:** * `obra(id, nome, cliente, programa, municipio, uf, datas, situação)` * `contrato(id, id_obra, numero, objeto, valor_inicial, crit_reajuste, indice, periodicidade, bdi_padrao_id)` * `lote(id, id_obra, código, descrição, extensao)` * `emop_item(cod_emop, descrição, unidade, família, subfamília, status)` * `emop_precos_ref(id, cod_emop, competência, preco_unit_ref, fonte)` * `cronograma_item(id, id_contrato, cod_emop, id_lote, qtd_total_contratada, preco_unit_contrato, caminho_critico)` * `medicação(id, id_contrato, competência, status, dados)` * `medicao_item(id, id_medicao, cod_emop, id_lote, qtd_medida, preco_unit, valor_medido)` * `memoria_calculo_item(id, id_medicao_item, criterio_medicao, detalhamento, qtd_comprovada, evidencias_url)` * `glosa(id, id_medicao_item, motivo, valor_glosado, responsavel, status)` * `reajuste(id, id_contrato, competência_aplicacao, índice, fator)` * `pagamento(id, id_medicao, valor_liquido, data_liquidacao, documento)` * `bdi_param(id, descrição, admin_pct, seguros_pct, garantia_pct, impostos_pct, lucro_pct, outros_pct)` * `auditoria(id, entidade, id_entidade, ação, usuário, timestamp, delta_json)` **Observação**: usar **chaves compostas** e **índices** em `(cod_emop, id_lote)`, `(id_contrato, competência)`. --- ## SQL DDL (base PostgreSQL) ```sql create table obra ( id chave primária serial, nome text not null, cliente text, programa text, municipio text, uf char(2), data_inicio_prev date, data_fim_prev date, data_inicio_real date, data_fim_real date, situacao text ); criar tabela contrato ( id serial chave primária, id_obra int referências obra(id), numero text, objeto text, valor_inicial numeric(18,2), crit_reajuste text, indice text, periodicidade text, bdi_padrao_id int ); criar lote de tabela ( id chave primária serial, id_obra int referências obra(id), código texto, descrição texto, extensão numérica(18,3) ); criar tabela emop_item ( chave primária de texto cod_emop, texto de descrição, texto de unidade, texto de família, texto de subfamília, texto de status ); criar tabela emop_precos_ref (id chave primária serial, referências de texto cod_emop emop_item(cod_emop), competência char(6) não nula, preco_unit_ref numérica(18,4) não nula, texto fonte ); criar índice idx_emop_precos_ref_emop_comp em emop_precos_ref(cod_emop, competência); criar tabela cronograma_item ( id serial primary key, id_contrato int references contrato(id), cod_emop text references emop_item(cod_emop), id_lote int references lote(id), qtd_total_contratada numeric(18,4) not null, preco_unit_contrato numeric(18,4) not null, caminho_critico boolean default false ); criar índice único ux_crono_item em cronograma_item(id_contrato, cod_emop,id_lote); create table medicao ( id serial primary key, id_contrato int references contrato(id), competencia char(6) not null, status text, data_envio date, data_aprovacao date, data_pagamento date ); create unique index ux_medicao_comp on medicao(id_contrato, competencia); create table medicao_item ( id serial primary key, id_medicao int references medicao(id), cod_emop text references emop_item(cod_emop), id_lote int references lote(id), qtd_medida numeric(18,4) not null, preco_unit numeric(18,4) not null, valor_medido numeric(18,2) generated always as (qtd_medida * preco_unit) stored ); create index idx_med_item_med on medicao_item(id_medicao); criar índice único ux_med_item em medicao_item(id_medicao, cod_emop, id_lote); criar tabela memoria_calculo_item ( id serial chave primária, id_medicao_item int referências medicao_item(id), criterio_medicao text, detalhamento text, qtd_comprovada numeric(18,4), evidencias_url text ); criar tabela glosa (id serial chave primária, id_medicao_item int referências medicao_item(id), motivo text, valor_glosado numeric(18,2) not null, responsavel text, status text ); criar tabela reajuste (id serial chave primária, id_contrato int referências contrato(id), competencia_aplicacao char(6) not null, indice text, fator numeric(12,6) ); criar tabela pagamento (id chave primária serial, id_medicao int referencia medicao(id), valor_liquido numérico(18,2) não nulo, data_liquidacao data, documento texto ); criar tabela bdi_param (id chave primária serial, texto de descrição, admin_pct numérico(7,4), seguros_pct numérico(7,4), garantia_pct numérico(7,4), impostos_pct numérico(7,4), lucro_pct numérico(7,4), outros_pct numérico(7,4) ); criar tabelas de auditoria (id bigserial Primary Key, entidade text, id_entidade text, acao text, usuario text, timestamp timestamptz default now(), delta_json jsonb ); ``` --- ## Layouts de Importação (CSV/XLSX) > **Padrão**: primeira linha = cabeçalho. Competência no formato **AAAAMM**. **1) EMOP — Preços de Referência (mensal)** * `competencia` (AAAAMM) * `cod_emop` * `descricao` (opcional) * `unidade` (opcional) * `preco_unit_ref` **2) Cronograma Contratado** * `id_contrato` * `id_lote` * `cod_emop` * `qtd_total_contratada` * `preco_unit_contrato` * `caminho_critico` (VERDADEIRO/FALSO) **3) Medição Mensal** * `id_contrato` * `competencia` (AAAAMM) * `id_lote` * `cod_emop` * `qtd_medida` * `preco_unit` (se vazio, usar preço do contrato) * `observacoes` (livre) **4) Memória de Cálculo (por item da medição)** * `id_contrato` * `competencia` (AAAAMM) * `id_lote` * `cod_emop` * `criterio_medicao` * `detalhamento` * `qtd_comprovada` * `evidencias_url` (link de pasta/foto) > **Chave de união** entre Medição e Memória: `(id_contrato, competência, id_lote, cod_emop)`. --- ## Validações Automáticas * Unidades compatíveis com o item EMOP. * Não ultrapasse quantidade contratada por `(cod_emop, id_lote)`.* Divergência de preço: alerta quando `preco_unit` ≠ `preco_unit_contrato`. * Memória obrigatória para famílias críticas (parâmetro do Admin). * Somatórios e taxas coerentes por competência e por lote. * Logs em `auditoria` para qualquer alteração após “enviado”. --- ## KPIs e Relatórios * **Avanço Físico (%)** e **Financeiro (%)** mensal e acumulado. * **Curvas S** (planejado x realizado). * **Curva ABC** por valor contratado e medido. * **Desvios** vs planejado e vs preço EMOP. * **Glosas** (% e valor) por motivo/responsável. * **Prazo de entrega**: envio → aprovação → pagamento. --- ## API (REST) ​​— Exemplos **Autenticação**: JWT. **POST /import/emop-precos** * Corpo: arquivo CSV/XLSX; retorna linhas transportadas e inconsistências. **POST /import/medicao** * Corpo: arquivo CSV/XLSX; cria/atualiza `medicao` e `medicao_item` com status "rascunho". **POST /import/memoria** * Corpo: arquivo CSV/XLSX; vincula `memoria_calculo_item` por chave composta. **GET /obras/{id}/painel** * KPIs de Retorna, Curvas S e ABC. **POST /medicoes/{id}/enviar** → **/aprovar** → **/glosar** → **/pagar** * Transições de status com auditorias. --- ## Telas (MVP) 1. **Painel da Obra**: status, Curvas S, ABC, top 10 itens por valor, glosas, lead time, mapa por frentes. 2. **Medição (Grid)**: importação, validação por regras, anexos/links de evidências, somatórios e erros em tempo real. 3. **Itens EMOP**: consulta por código/descrição, unidade, histórico de preço, famílias. 4. **Contrato & Lotes**: saldo contratual, avanço por lote, eventos de reajuste. 5. **Glosas/Aprovação**: fila de análise com impacto financeiro instantâneo. --- ## Tecnologias Sugeridas * **Backend**: Node.js (NestJS) ou Python (FastAPI). Banco **PostgreSQL**. * **Frontend**: React (Next.js) + tabela virtualizada; gráficos com Recharts ou ECharts. * **Autenticação**: JWT + RBAC por perfil. * **Upload/Armazenamento**: compatível com S3 (links para evidências em memória de projeto). * **Relatórios**: exportar PDF/XLSX no servidor (PDFKit / ExcelJS). * **Infra**: Docker; implantar em Hostinger (contêiner) ou VPS; backups diários. --- ## Critérios de Aceite (MVP) 1. Importar **3 arquivos** (EMOP Preços, Medição, Memória) e consolidar sem erros críticos, gerando status. 2. Impedir a redução da quantidade contratada; exibir alerta de preço divergente. 3. Gerar **Curva S** e **ABC** para a obra e exibir no Painel. 4. Workflow completo de medição com auditorias e carimbos de data/hora. 5. Exportar **Relatório da Medição** (PDF) e **Resumo Executivo** (XLSX) por competência. --- ## Dados de Teste Mínimos * 1 Obra, 1 Contrato, 2 Lotes. * 50 itens EMOP no cronograma; 20 itens medidos em 2 competências. *Memórias de projeto para 10 itens (incluindo famílias críticas). * 1 evento de reajuste aplicado na competência 2. --- ## Roadmap (pós‑MVP) * App mobile offline‑first para coleta em campo (fotos GPS, assinatura digital). * Integração com índices oficiais de reajuste.* Módulo de orçamento com contribuições e insumos. * Previsão de prazo/custo via séries temporais. --- ## Observações para implementação * Adotar **chaves compostas** e **índices** para desempenho nas telas de medição. * Normalizar unidades do EMOP; criar tabela de equivalência se necessário. * Guardar **delta_json** na auditoria para cada mudança de status/dado crítico. * Trabalhar sempre com **competência AAAAMM** para precisão e preços de referência. --- ## Entregáveis ​​1. Banco de dados PostgreSQL com tabelas/índices criados (DDL acima). 2. API REST funcional (endpoints e autenticação). 3. Frontend com 5 telas do MVP e exportações PDF/XLSX. 4. Scripts de importação com validações e relatório de inconsistências. 5. Docker Compose para subir a pilha. --- ### Fim do Prompt > Qualquer dúvida técnica, siga este documento como **fonte de verdade**. O cliente disponibiliza exemplos de planilhas e o Catálogo EMOP 13ª Edição como referência de modificação/unidades. Os ajustes visuais devem seguir estética moderna e limpa (sistema de design claro, priorizando legibilidade em grades).
+{
+  "looting": {
+    "items": [
+      {
+        "id": 3035,
+        "count": 1
+      },
+      {
+        "id": 10309,
+        "count": 1
+      },
+      {
+        "id": 3032,
+        "count": 1
+      },
+      {
+        "id": 9302,
+        "count": 1
+      },
+      {
+        "id": 814,
+        "count": 1
+      },
+      {
+        "id": 3370,
+        "count": 1
+      },
+      {
+        "id": 811,
+        "count": 1
+      },
+      {
+        "id": 3436,
+        "count": 1
+      },
+      {
+        "id": 812,
+        "count": 1
+      },
+      {
+        "id": 7413,
+        "count": 1
+      },
+      {
+        "id": 3414,
+        "count": 1
+      },
+      {
+        "id": 3364,
+        "count": 1
+      },
+      {
+        "id": 3026,
+        "count": 1
+      },
+      {
+        "id": 3366,
+        "count": 1
+      },
+      {
+        "id": 5879,
+        "count": 1
+      },
+      {
+        "id": 3371,
+        "count": 1
+      },
+      {
+        "id": 3055,
+        "count": 1
+      },
+      {
+        "id": 828,
+        "count": 1
+      },
+      {
+        "id": 10282,
+        "count": 1
+      },
+      {
+        "id": 3029,
+        "count": 1
+      },
+      {
+        "id": 3369,
+        "count": 1
+      },
+      {
+        "id": 3392,
+        "count": 1
+      },
+      {
+        "id": 3079,
+        "count": 1
+      },
+      {
+        "id": 9694,
+        "count": 1
+      },
+      {
+        "id": 7386,
+        "count": 1
+      },
+      {
+        "id": 3428,
+        "count": 1
+      },
+      {
+        "id": 10313,
+        "count": 1
+      },
+      {
+        "id": 3381,
+        "count": 1
+      },
+      {
+        "id": 8052,
+        "count": 1
+      },
+      {
+        "id": 7456,
+        "count": 1
+      },
+      {
+        "id": 8074,
+        "count": 1
+      },
+      {
+        "id": 5904,
+        "count": 1
+      },
+      {
+        "id": 11659,
+        "count": 1
+      },
+      {
+        "id": 11661,
+        "count": 1
+      },
+      {
+        "id": 11658,
+        "count": 1
+      },
+      {
+        "id": 3028,
+        "count": 1
+      },
+      {
+        "id": 11660,
+        "count": 1
+      },
+      {
+        "id": 3725,
+        "count": 1
+      },
+      {
+        "id": 10390,
+        "count": 1
+      },
+      {
+        "id": 11690,
+        "count": 1
+      },
+      {
+        "id": 10391,
+        "count": 1
+      },
+      {
+        "id": 10387,
+        "count": 1
+      },
+      {
+        "id": 10385,
+        "count": 1
+      },
+      {
+        "id": 11651,
+        "count": 1
+      },
+      {
+        "id": 11674,
+        "count": 1
+      },
+      {
+        "id": 11693,
+        "count": 1
+      },
+      {
+        "id": 7404,
+        "count": 1
+      },
+      {
+        "id": 11657,
+        "count": 1
+      },
+      {
+        "id": 3554,
+        "count": 1
+      },
+      {
+        "id": 3033,
+        "count": 0
+      },
+      {
+        "id": 3043,
+        "count": 1
+      },
+      {
+        "id": 14112,
+        "count": 1
+      },
+      {
+        "id": 7418,
+        "count": 1
+      },
+      {
+        "id": 823,
+        "count": 1
+      },
+      {
+        "id": 8082,
+        "count": 1
+      },
+      {
+        "id": 8061,
+        "count": 1
+      },
+      {
+        "id": 3567,
+        "count": 1
+      },
+      {
+        "id": 3006,
+        "count": 1
+      },
+      {
+        "id": 3324,
+        "count": 1
+      },
+      {
+        "id": 825,
+        "count": 1
+      },
+      {
+        "id": 3360,
+        "count": 1
+      },
+      {
+        "id": 5882,
+        "count": 0
+      },
+      {
+        "id": 5948,
+        "count": 0
+      },
+      {
+        "id": 3280,
+        "count": 1
+      },
+      {
+        "id": 7402,
+        "count": 1
+      },
+      {
+        "id": 3386,
+        "count": 1
+      },
+      {
+        "id": 5877,
+        "count": 0
+      },
+      {
+        "id": 5920,
+        "count": 0
+      },
+      {
+        "id": 7430,
+        "count": 1
+      },
+      {
+        "id": 3416,
+        "count": 1
+      },
+      {
+        "id": 3322,
+        "count": 1
+      },
+      {
+        "id": 3071,
+        "count": 1
+      },
+      {
+        "id": 10386,
+        "count": 1
+      },
+      {
+        "id": 10323,
+        "count": 1
+      },
+      {
+        "id": 10450,
+        "count": 2
+      },
+      {
+        "id": 10418,
+        "count": 1
+      },
+      {
+        "id": 10397,
+        "count": 1
+      },
+      {
+        "id": 10449,
+        "count": 1
+      },
+      {
+        "id": 10451,
+        "count": 1
+      },
+      {
+        "id": 7415,
+        "count": 1
+      },
+      {
+        "id": 5930,
+        "count": 1
+      },
+      {
+        "id": 3281,
+        "count": 1
+      },
+      {
+        "id": 3342,
+        "count": 1
+      },
+      {
+        "id": 7396,
+        "count": 1
+      },
+      {
+        "id": 7454,
+        "count": 1
+      },
+      {
+        "id": 7407,
+        "count": 1
+      },
+      {
+        "id": 9058,
+        "count": 1
+      },
+      {
+        "id": 7451,
+        "count": 1
+      },
+      {
+        "id": 5925,
+        "count": 1
+      },
+      {
+        "id": 5895,
+        "count": 2
+      },
+      {
+        "id": 5880,
+        "count": 1
+      },
+      {
+        "id": 813,
+        "count": 1
+      },
+      {
+        "id": 7387,
+        "count": 1
+      },
+      {
+        "id": 3318,
+        "count": 1
+      },
+      {
+        "id": 3385,
+        "count": 1
+      },
+      {
+        "id": 3321,
+        "count": 1
+      },
+      {
+        "id": 3081,
+        "count": 1
+      },
+      {
+        "id": 3048,
+        "count": 1
+      },
+      {
+        "id": 5893,
+        "count": 1
+      },
+      {
+        "id": 9057,
+        "count": 1
+      },
+      {
+        "id": 11671,
+        "count": 1
+      },
+      {
+        "id": 11672,
+        "count": 1
+      },
+      {
+        "id": 11673,
+        "count": 1
+      },
+      {
+        "id": 10416,
+        "count": 1
+      },
+      {
+        "id": 10408,
+        "count": 1
+      },
+      {
+        "id": 5876,
+        "count": 1
+      },
+      {
+        "id": 5881,
+        "count": 1
+      },
+      {
+        "id": 10415,
+        "count": 1
+      },
+      {
+        "id": 3030,
+        "count": 1
+      },
+      {
+        "id": 10388,
+        "count": 1
+      },
+      {
+        "id": 8043,
+        "count": 1
+      },
+      {
+        "id": 8094,
+        "count": 1
+      },
+      {
+        "id": 11691,
+        "count": 1
+      },
+      {
+        "id": 830,
+        "count": 1
+      },
+      {
+        "id": 11688,
+        "count": 1
+      },
+      {
+        "id": 3065,
+        "count": 1
+      },
+      {
+        "id": 5911,
+        "count": 1
+      },
+      {
+        "id": 3284,
+        "count": 1
+      },
+      {
+        "id": 8864,
+        "count": 1
+      },
+      {
+        "id": 7399,
+        "count": 1
+      },
+      {
+        "id": 236,
+        "count": 0
+      }
+    ],
+    "maxDanger": 10,
+    "minCapacity": 0,
+    "containers": [
+      {
+        "id": 2854,
+        "count": 1
+      },
+      {
+        "id": 2867,
+        "count": 1
+      },
+      {
+        "id": 5801,
+        "count": 1
+      },
+      {
+        "id": 2869,
+        "count": 1
+      },
+      {
+        "id": 8860,
+        "count": 1
+      },
+      {
+        "id": 2868,
+        "count": 1
+      }
+    ],
+    "everyItem": true
+  },
+  "targeting": [
+    {
+      "lureDelay": 250,
+      "lureMin": 1,
+      "maxDistance": 10,
+      "anchorRange": 3,
+      "lureCount": 1,
+      "avoidAttacks": false,
+      "rePositionAmount": 5,
+      "lureMax": 10,
+      "rpSafe": false,
+      "chase": true,
+      "priority": 1,
+      "name": "Carniphila,Wild Warrior,Spider,Poison Spider,Stone Golem",
+      "keepDistance": false,
+      "keepDistanceRange": 1,
+      "danger": 1,
+      "dynamicLureDelay": false,
+      "delayFrom": 2,
+      "closeLure": false,
+      "faceMonster": false,
+      "lureCavebot": false,
+      "dontLoot": true,
+      "diamondArrows": false,
+      "lure": false,
+      "anchor": false,
+      "closeLureAmount": 3,
+      "rePosition": false,
+      "dynamicLure": true,
+      "regex": "^carniphila$|^wild warrior$|^spider$|^poison spider$|^stone golem$"
+    },
+    {
+      "lureDelay": 250,
+      "lureMin": 1,
+      "maxDistance": 10,
+      "anchorRange": 3,
+      "lureCount": 1,
+      "avoidAttacks": true,
+      "rePositionAmount": 5,
+      "lureMax": 3,
+      "regex": "^grim reaper$",
+      "dynamicLureDelay": false,
+      "priority": 1,
+      "dynamicLure": false,
+      "keepDistance": false,
+      "danger": 1,
+      "chase": true,
+      "keepDistanceRange": 1,
+      "lure": false,
+      "closeLure": false,
+      "faceMonster": false,
+      "lureCavebot": false,
+      "dontLoot": false,
+      "diamondArrows": false,
+      "delayFrom": 2,
+      "anchor": false,
+      "closeLureAmount": 3,
+      "rePosition": false,
+      "name": "Grim Reaper",
+      "rpSafe": false
+    },
+    {
+      "lureDelay": 250,
+      "lureMin": 1,
+      "maxDistance": 10,
+      "anchorRange": 3,
+      "lureCount": 1,
+      "avoidAttacks": false,
+      "rePositionAmount": 5,
+      "lureMax": 3,
+      "regex": "^.*$",
+      "dynamicLureDelay": false,
+      "priority": 1,
+      "dynamicLure": false,
+      "keepDistance": false,
+      "danger": 1,
+      "chase": true,
+      "keepDistanceRange": 1,
+      "lure": false,
+      "closeLure": false,
+      "faceMonster": false,
+      "lureCavebot": false,
+      "dontLoot": false,
+      "diamondArrows": false,
+      "delayFrom": 2,
+      "anchor": false,
+      "closeLureAmount": 3,
+      "rePosition": false,
+      "name": "*",
+      "rpSafe": false
+    }
+  ]
+}
